@@ -12,8 +12,6 @@ dayjs.extend(relativeTime);
 const CreatePostWizard = () => {
   const { user } = useUser();
 
-  console.log(user);
-
   if (!user) return null;
 
   return (
@@ -59,6 +57,17 @@ export default function Home() {
   const { data, isLoading } = api.posts.getAll.useQuery();
 
   if (isLoading) {
+    if (user.isSignedIn === false) {
+      return (
+        <>
+          <div>loading...</div>
+          <div className="flex justify-center text-slate-100">
+            <SignInButton />
+          </div>
+        </>
+      );
+    }
+
     return (<div>loading...</div>);
   }
 
@@ -77,7 +86,7 @@ export default function Home() {
         <div className="h-full w-full border-x border-slate-400 md:max-w-2xl">
           <div className="border-b border-slate-400 p-4 flex">
             {!user.isSignedIn && (
-              <div className="flex justify-center">
+              <div className="flex justify-center text-slate-100">
                 <SignInButton />
               </div>)}
             {user.isSignedIn && <CreatePostWizard />}
