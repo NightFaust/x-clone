@@ -4,7 +4,7 @@ import { createServerSideHelpers } from '@trpc/react-query/server';
 import { appRouter } from '~/server/api/root';
 import { db } from '~/server/db';
 import superjson from 'superjson';
-import { GetStaticProps, NextPage } from "next";
+import type { GetStaticProps, NextPage } from "next";
 import { PageLayout } from "~/components/layout";
 
 const ProfilePage: NextPage<{ username: string }> = ({ username }) => {
@@ -47,7 +47,7 @@ export const getStaticProps: GetStaticProps = async (context) => {
 
   const username = slug.replace("@", "");
 
-  helpers.profile.getUserByUsername.prefetch({
+  await helpers.profile.getUserByUsername.prefetch({
     username: username,
   });
 

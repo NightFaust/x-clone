@@ -1,4 +1,5 @@
 import Head from "next/head";
+import { PageLayout } from "~/components/layout";
 
 const SinglePostPage = () => {
 
@@ -7,11 +8,11 @@ const SinglePostPage = () => {
       <Head>
         <title>Post</title>
       </Head>
-      <main className="flex justify-center h-screen">
+      <PageLayout>
         <div>
           Single Post
-        </div>
-      </main>
+        </div >
+      </PageLayout >
     </>
   );
 };
