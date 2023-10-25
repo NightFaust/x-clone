@@ -8,88 +8,106 @@ import {filterUserForClient} from "~/server/helpers/filterUserForClient";
 import {type Post} from "@prisma/client";
 
 const addUserDataToPosts = async (posts: Post[]) => {
-  const users = (
-    await clerkClient.users.getUserList({
-      userId: posts.map((post) => post.authorId),
-      limit: 100,
-    })
-  ).map(filterUserForClient);
+    const users = (
+        await clerkClient.users.getUserList({
+            userId: posts.map((post) => post.authorId),
+            limit: 100,
+        })
+    ).map(filterUserForClient);
 
-  return posts.map(post => {
-    const author = users.find((user) => user.id === post.authorId);
+    return posts.map(post => {
+        const author = users.find((user) => user.id === post.authorId);
 
-    if (!author?.username) {
-      throw new TRPCError({
-        code: "INTERNAL_SERVER_ERROR",
-        message: "Author for post not found",
-      });
-    }
+        if (!author?.username) {
+            throw new TRPCError({
+                code: "INTERNAL_SERVER_ERROR",
+                message: "Author for post not found",
+            });
+        }
 
-    return {
-      post,
-      author: {
-        ...author,
-        username: author.username,
-      },
-    };
-  });
+        return {
+            post,
+            author: {
+                ...author,
+                username: author.username,
+            },
+        };
+    });
 };
 
 const ratelimit = new Ratelimit({
-  redis: Redis.fromEnv(),
-  limiter: Ratelimit.slidingWindow(3, "1 m"),
-  analytics: true,
-  prefix: "@upstash/ratelimit",
+    redis: Redis.fromEnv(),
+    limiter: Ratelimit.slidingWindow(3, "1 m"),
+    analytics: true,
+    prefix: "@upstash/ratelimit",
 });
 
 export const postRouter = createTRPCRouter({
-  getAll: publicProcedure.query(async ({ctx}) => {
-    const posts = await ctx.db.post.findMany({
-      take: 100,
-      orderBy: [{
-        createdAt: 'desc',
-      }],
-    });
 
-    return addUserDataToPosts(posts);
-  }),
-
-  getPostByUserId: publicProcedure
-    .input(z.object({
-      userId: z.string(),
+    getById: publicProcedure.input(z.object({
+        id: z.string(),
     }))
-    .query(({ctx, input}) => ctx.db.post.findMany({
-        where: {
-          authorId: input.userId,
-        },
-        take: 100,
-        orderBy: [{
-          createdAt: 'desc',
-        }],
-      }).then(addUserDataToPosts)
-    ),
+        .query(async ({ctx, input}) => {
+            const post = await ctx.db.post.findUnique({
+                where: {
+                    id: input.id,
+                }
+            });
 
-  create: privateProcedure
-    .input(z.object({
-      content: z.string().emoji("Only emojis are allowed").min(1).max(280),
-    }))
-    .mutation(async ({ctx, input}) => {
-      const authorId = ctx.userId;
+            if (!post) {
+                throw new TRPCError({code: "NOT_FOUND"});
+            }
 
-      const {success} = await ratelimit.limit(authorId);
+            return (await addUserDataToPosts([post]))[0];
+        }),
 
-      if (!success) {
-        throw new TRPCError({
-          code: "TOO_MANY_REQUESTS",
+    getAll: publicProcedure.query(async ({ctx}) => {
+        const posts = await ctx.db.post.findMany({
+            take: 100,
+            orderBy: [{
+                createdAt: 'desc',
+            }],
         });
-      }
 
-      return await ctx.db.post.create({
-        data: {
-          authorId,
-          content: input.content,
-        },
-      });
+        return addUserDataToPosts(posts);
     }),
+
+    getPostByUserId: publicProcedure
+        .input(z.object({
+            userId: z.string(),
+        }))
+        .query(({ctx, input}) => ctx.db.post.findMany({
+                where: {
+                    authorId: input.userId,
+                },
+                take: 100,
+                orderBy: [{
+                    createdAt: 'desc',
+                }],
+            }).then(addUserDataToPosts)
+        ),
+
+    create: privateProcedure
+        .input(z.object({
+            content: z.string().emoji("Only emojis are allowed").min(1).max(280),
+        }))
+        .mutation(async ({ctx, input}) => {
+            const authorId = ctx.userId;
+
+            const {success} = await ratelimit.limit(authorId);
+
+            if (!success) {
+                throw new TRPCError({
+                    code: "TOO_MANY_REQUESTS",
+                });
+            }
+
+            return await ctx.db.post.create({
+                data: {
+                    authorId,
+                    content: input.content,
+                },
+            });
+        }),
 });
 
