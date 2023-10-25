@@ -6,6 +6,7 @@ import {Redis} from "@upstash/redis/nodejs";
 import {Ratelimit} from "@upstash/ratelimit";
 import {filterUserForClient} from "~/server/helpers/filterUserForClient";
 import {type Post} from "@prisma/client";
+import emojiRegex from 'emoji-regex';
 
 const addUserDataToPosts = async (posts: Post[]) => {
     const users = (
@@ -96,6 +97,14 @@ export const postRouter = createTRPCRouter({
 
             const {success} = await ratelimit.limit(authorId);
 
+            const validatedInput = input.content.match(emojiRegex());
+
+            if (!validatedInput) {
+                throw new TRPCError({
+                    code: "PARSE_ERROR",
+                });
+            }
+
             if (!success) {
                 throw new TRPCError({
                     code: "TOO_MANY_REQUESTS",
@@ -105,7 +114,7 @@ export const postRouter = createTRPCRouter({
             return await ctx.db.post.create({
                 data: {
                     authorId,
-                    content: input.content,
+                    content: validatedInput.join(""),
                 },
             });
         }),
